@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 from typing import Any, Protocol, TypeVar, runtime_checkable
-
 
 T = TypeVar("T")
 
@@ -46,7 +43,7 @@ class ContainerWithPlugins:
     Plugins can execute actions before and after dependency resolution.
     """
 
-    def __init__(self, container: ResolvableContainer):
+    def __init__(self, container: ResolvableContainer) -> None:
         """Initializes the ContainerWithPlugins.
 
         Args:
@@ -85,6 +82,8 @@ class ContainerWithPlugins:
 
 class LoggingPlugin(DIPlugin):
     """An example plugin for logging the dependency resolution process."""
+
+    # TODO: Request a logger Protocol in __init__ instead of using print
 
     def pre_resolve(self, interface: Any) -> None:
         """Logs before resolution."""

@@ -1,14 +1,17 @@
-from __future__ import annotations
-
 from collections.abc import Awaitable, Callable
 
-from fastapi import FastAPI, Request, Response
+from ..exceptions import NoModuleError
+
+try:
+    from fastapi import FastAPI, Request, Response
+except ImportError as e:
+    raise NoModuleError(name="fastapi", module_name="fastapi") from e
 
 from ..container import Container
 from ..scopes import Scope
 
 
-def setup_dependency_injection(app: FastAPI, container: Container) -> None:
+def setup_dependency_injection(app: "FastAPI", container: Container) -> None:
     """Sets up DI middleware for a FastAPI application.
 
     This middleware manages the lifecycle of 'request' scoped dependencies,
@@ -21,7 +24,7 @@ def setup_dependency_injection(app: FastAPI, container: Container) -> None:
 
     @app.middleware("http")
     async def di_middleware(
-        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+        request: "Request", call_next: Callable[["Request"], Awaitable["Response"]]
     ) -> Response:
         """FastAPI middleware to enter and exit the REQUEST scope.
 

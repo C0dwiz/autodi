@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections.abc import Callable
 from typing import Any, Generic, TypeVar, Union
 
@@ -13,7 +11,7 @@ class DependencyKey(Generic[T]):
 
     __slots__ = ("interface", "scope")
 
-    def __init__(self, interface: Any, scope: ScopeType):
+    def __init__(self, interface: Any, scope: ScopeType) -> None:
         """Initializes the DependencyKey.
 
         Args:
@@ -49,7 +47,7 @@ class DependencyConfig(Generic[T]):
         scope: ScopeType = "app",
         init_hook: str | None = None,
         destroy_hook: str | None = None,
-    ):
+    ) -> None:
         """Initializes the DependencyConfig.
 
         Args:
@@ -64,5 +62,5 @@ class DependencyConfig(Generic[T]):
         self.destroy_hook = destroy_hook
 
 
-InjectionTarget = Union[type[T], Callable[..., T]]
+InjectionTarget = type[T] | Callable[..., T]
 "A type hint for a dependency that can be a class or a factory function."

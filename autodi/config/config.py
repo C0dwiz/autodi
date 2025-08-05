@@ -1,7 +1,6 @@
-from __future__ import annotations
 from importlib import import_module
 from pathlib import Path
-from typing import Type, Any
+from typing import Any
 
 import yaml
 
@@ -11,10 +10,11 @@ from ..scopes import Scope
 class DIConfig:
     """Loads dependency configurations from a YAML file."""
 
-    def __init__(self, container: Any):
+    def __init__(self, container: Any) -> None:
         """Initializes the DIConfig.
 
         Args:
+
             container: The container instance to register dependencies with.
         """
         self._container = container
@@ -26,6 +26,7 @@ class DIConfig:
             file_path: The path to the YAML file.
 
         Raises:
+
             FileNotFoundError: If the configuration file does not exist.
             ValueError: If the YAML file is malformed or contains errors.
         """
@@ -46,9 +47,7 @@ class DIConfig:
                 interface = self._import_class(interface_path)
                 implementation_path = params.get("implementation")
                 implementation = (
-                    self._import_class(implementation_path)
-                    if implementation_path
-                    else None
+                    self._import_class(implementation_path) if implementation_path else None
                 )
 
                 self._container.register(
@@ -61,9 +60,9 @@ class DIConfig:
             except (KeyError, ImportError, TypeError) as e:
                 raise ValueError(
                     f"Error processing dependency '{interface_path}': {e}"
-                ) from e
+                ) from e  # noqa: PERF203
 
-    def _import_class(self, class_path: str) -> Type[Any]:
+    def _import_class(self, class_path: str) -> type[Any]:
         """Dynamically imports a class from a string path.
 
         Args:

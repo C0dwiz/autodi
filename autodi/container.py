@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import inspect
 from collections import defaultdict
 from collections.abc import AsyncGenerator, Callable, Generator
@@ -29,7 +27,7 @@ class Provider:
         scope: ScopeType,
         init_hook: str | None = None,
         destroy_hook: str | None = None,
-    ):
+    ) -> None:
         """Initializes a Provider.
 
         Args:
@@ -67,9 +65,7 @@ class Container:
     def __init__(self) -> None:
         """Initializes the Container."""
         self._providers: dict[Any, Provider] = {}
-        self._scoped_instances: defaultdict[ScopeType, dict[Any, Any]] = defaultdict(
-            dict
-        )
+        self._scoped_instances: defaultdict[ScopeType, dict[Any, Any]] = defaultdict(dict)
         self._resolution_stack: list[Any] = []
         self._current_scope: ScopeType | None = None
 
@@ -94,9 +90,7 @@ class Container:
             destroy_hook: The name of a method to call when the scope is cleaned up.
         """
         if implementation and provider:
-            raise ValueError(
-                "Cannot specify both 'implementation' and 'provider' simultaneously."
-            )
+            raise ValueError("Cannot specify both 'implementation' and 'provider' simultaneously.")
 
         impl = implementation or interface
 
@@ -107,9 +101,7 @@ class Container:
                 return impl()
             return impl
 
-        self._providers[interface] = Provider(
-            provider or factory, scope, init_hook, destroy_hook
-        )
+        self._providers[interface] = Provider(provider or factory, scope, init_hook, destroy_hook)
 
     def override_provider(
         self,
@@ -135,10 +127,7 @@ class Container:
         Returns:
             The resolved dependency instance.
         """
-        if (
-            self._current_scope
-            and target in self._scoped_instances[self._current_scope]
-        ):
+        if self._current_scope and target in self._scoped_instances[self._current_scope]:
             return self._scoped_instances[self._current_scope][target]
 
         if target in self._scoped_instances[Scope.APP]:
@@ -170,10 +159,7 @@ class Container:
         Returns:
             The resolved dependency instance.
         """
-        if (
-            self._current_scope
-            and target in self._scoped_instances[self._current_scope]
-        ):
+        if self._current_scope and target in self._scoped_instances[self._current_scope]:
             return self._scoped_instances[self._current_scope][target]
 
         if target in self._scoped_instances[Scope.APP]:
@@ -226,7 +212,8 @@ class Container:
             if provider.scope != Scope.APP and self._current_scope != Scope.APP:
                 raise ScopeError(
                     str(provider.scope),
-                    f"Cannot resolve {target} with scope {provider.scope} in {self._current_scope} scope",
+                    f"Cannot resolve {target} with scope {provider.scope} "
+                    f"in {self._current_scope} scope",
                 )
 
     def _instantiate_class(self, cls: type[T]) -> T:
@@ -272,9 +259,7 @@ class Container:
             self._current_scope = None
 
     @asynccontextmanager
-    async def enter_scope_async(
-        self, scope_name: ScopeType
-    ) -> AsyncGenerator[None, None]:
+    async def enter_scope_async(self, scope_name: ScopeType) -> AsyncGenerator[None, None]:
         """A context manager for entering an asynchronous scope.
 
         Args:
@@ -299,11 +284,7 @@ class Container:
         if scope_name in self._scoped_instances:
             for interface, instance in self._scoped_instances[scope_name].items():
                 provider = self._providers.get(interface)
-                if (
-                    provider
-                    and provider.destroy_hook
-                    and hasattr(instance, provider.destroy_hook)
-                ):
+                if provider and provider.destroy_hook and hasattr(instance, provider.destroy_hook):
                     getattr(instance, provider.destroy_hook)()
             del self._scoped_instances[scope_name]
 
@@ -316,11 +297,7 @@ class Container:
         if scope_name in self._scoped_instances:
             for interface, instance in self._scoped_instances[scope_name].items():
                 provider = self._providers.get(interface)
-                if (
-                    provider
-                    and provider.destroy_hook
-                    and hasattr(instance, provider.destroy_hook)
-                ):
+                if provider and provider.destroy_hook and hasattr(instance, provider.destroy_hook):
                     hook = getattr(instance, provider.destroy_hook)
                     result = hook()
                     if inspect.isawaitable(result):

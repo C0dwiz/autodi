@@ -1,10 +1,30 @@
-from __future__ import annotations
+class AutoDIError(Exception):
+    """Base class for all library related errors."""
+
+    message: str
+
+    def __str__(self) -> str:
+        return self.message
+
+
+class NoModuleError(AutoDIError):
+    message = (
+        "{name} can be used only when {module_name} installed\n"
+        "Just install {module_name} (`pip install {module_name}`)"
+    )
+
+    def __init__(self, name: str, module_name: str) -> None:
+        self.name = name
+        self.module_name = module_name
+
+    def __str__(self) -> str:
+        return self.message.format(name=self.name, module_name=self.module_name)
 
 
 class DependencyError(Exception):
     """Base class for all dependency injection related errors."""
 
-    def __init__(self, message: str = "Dependency injection error occurred"):
+    def __init__(self, message: str = "Dependency injection error occurred") -> None:
         """Initializes the DependencyError.
 
         Args:
@@ -17,7 +37,7 @@ class DependencyError(Exception):
 class DependencyResolutionError(DependencyError):
     """Raised when a dependency cannot be resolved."""
 
-    def __init__(self, dependency: type, message: str = "Failed to resolve dependency"):
+    def __init__(self, dependency: type, message: str = "Failed to resolve dependency") -> None:
         """Initializes the DependencyResolutionError.
 
         Args:
@@ -36,9 +56,7 @@ class AsyncDependencyError(DependencyError):
 class CircularDependencyError(DependencyError):
     """Raised when a circular dependency is detected."""
 
-    def __init__(
-        self, chain: list[type], message: str = "Circular dependency detected"
-    ):
+    def __init__(self, chain: list[type], message: str = "Circular dependency detected") -> None:
         """Initializes the CircularDependencyError.
 
         Args:
@@ -54,7 +72,7 @@ class CircularDependencyError(DependencyError):
 class ScopeError(DependencyError):
     """Raised for errors related to dependency scopes."""
 
-    def __init__(self, scope: str, message: str = "Scope error"):
+    def __init__(self, scope: str, message: str = "Scope error") -> None:
         """Initializes the ScopeError.
 
         Args:
@@ -69,7 +87,7 @@ class ScopeError(DependencyError):
 class ProviderError(DependencyError):
     """Raised when a provider fails to create an instance."""
 
-    def __init__(self, provider: type, message: str = "Provider failed"):
+    def __init__(self, provider: type, message: str = "Provider failed") -> None:
         """Initializes the ProviderError.
 
         Args:

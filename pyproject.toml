@@ -28,3 +28,137 @@ mypy = "^1.17.1"
 pytest = "^8.4.1"
 pre-commit = "^4.2.0"
 
+
+[tool.ruff]
+line-length = 99
+src = ["autodi", "tests"]
+exclude = [
+    ".git",
+    "build",
+    "dist",
+    "venv",
+    ".venv",
+    "docs",
+    "tests",
+    "dev",
+    "scripts",
+    "*.egg-info",
+]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "I",
+    "N",
+    "Q",
+    "W",
+
+    "C4",
+    "C90",
+    "FBT",
+    "PERF",
+    "PL",
+    "PT",
+    "T10",
+    "T20",
+    "TRY",
+    "UP",
+
+    "ANN",
+    "ARG",
+    "ERA",
+    "FURB",
+    "RET",
+    "SIM",
+    "YTT",
+]
+ignore = [
+    "D100",  # Missing docstring in public module
+    "D101",  # Missing docstring in public class
+    "D102",  # Missing docstring in public method
+    "D103",  # Missing docstring in public function
+    "D104",  # Missing docstring in public package
+    "D105",  # Missing docstring in magic method
+    "D107",  # Missing docstring in `__init__`
+    "D212",  # Multi-line docstring summary should start at the firest line
+    "D203",  # 1 blank line required before class docstring
+    "D205",  # 1 blank line required between summary line and description
+    "D400",  # First line should end with a period
+    "D401",  # First line should be in imperative mood
+    "D415",  # First line should end with a period, question mark, or exclamation point
+    "D202",
+    "D213",
+    "B024",    # ABC without abstractmethod
+    "TRY003",  # TRY003 Avoid specifying long messages outside the exception class
+    "PLR0913",
+    "ERA001", # Found commented-out code
+]
+
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "autodi",
+]
+
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = [
+    "tests",
+]
+filterwarnings = [
+    "error",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
+
+[tool.mypy]
+python_version = "3.10"
+show_error_codes = true
+show_error_context = true
+pretty = true
+ignore_missing_imports = false
+warn_unused_configs = true
+disallow_subclassing_any = true
+disallow_any_generics = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+follow_imports_for_stubs = true
+namespace_packages = true
+show_absolute_path = true
+
+[tool.black]
+line-length = 99
+target-version = ['py310', 'py311', 'py312', 'py313']
+exclude = '''
+(
+    \.eggs
+  | \.git
+  | \.tox
+  | build
+  | dist
+  | venv
+  | docs
+)
+'''
+
+[tool.isort]
+profile = "black"
+

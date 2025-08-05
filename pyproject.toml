@@ -93,6 +93,8 @@ ignore = [
     "D400",  # First line should end with a period
     "D401",  # First line should be in imperative mood
     "D415",  # First line should end with a period, question mark, or exclamation point
+    "D412",  # No blank lines allowed between a section header and its content ("*")
+    "D413",  # Missing blank line after last section ("*")
     "D202",
     "D213",
     "B024",    # ABC without abstractmethod

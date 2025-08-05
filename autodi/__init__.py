@@ -1,14 +1,15 @@
-from .container import Container
 from .config.config import DIConfig
-from .utils.plugins import ContainerWithPlugins, DIPlugin
+from .container import Container, inject
 from .exceptions import (
-    DependencyError,
-    DependencyResolutionError,
     AsyncDependencyError,
     CircularDependencyError,
+    DependencyError,
+    DependencyResolutionError,
+    ProviderError,
+    ScopeError,
 )
-
-from .container import inject
+from .scopes import Scope
+from .utils.plugins import ContainerWithPlugins, DIPlugin
 
 __all__ = [
     "Container",
@@ -17,8 +18,12 @@ __all__ = [
     "DependencyResolutionError",
     "AsyncDependencyError",
     "CircularDependencyError",
-    "Container",
+    "ScopeError",
+    "ProviderError",
     "DIConfig",
     "ContainerWithPlugins",
     "DIPlugin",
+    "Scope",
 ]
+
+__version__ = (1, 0, 2)

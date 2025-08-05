@@ -1,175 +1,113 @@
 # AutoDI Testing Guide
 
-## 🧪 Unit Testing Fundamentals
+One of the primary benefits of dependency injection is improved testability. AutoDI provides tools to make testing your components easy and efficient.
 
-### Basic Test Setup
-```python
-import pytest
-from autodi import Container
+## 🎯 Overriding Providers for Mocks
 
-class TestService:
-    def process(self):
-        return "Real result"
+The most powerful feature for testing is the ability to replace a real dependency with a mock or fake version. This allows you to test components in isolation.
 
-def test_basic_resolution():
-    container = Container()
-    container.register(TestService)
-    
-    service = container.resolve(TestService)
-    assert service.process() == "Real result"
-```
+### Basic Mocking Example
 
-### Mocking Dependencies
 ```python
 from unittest.mock import Mock
-
-def test_with_mocks():
-    container = Container()
-    
-    # Create and register mock
-    mock_db = Mock()
-    mock_db.query.return_value = "test_data"
-    container.register(Database, mock_db)
-    
-    service = container.resolve(UserService)
-    assert service.get_data() == "test_data"
-```
-
-## 🎯 Advanced Testing Patterns
-
-### Contextual Mocks
-```python
-class TestPaymentService:
-    def test_declined_payments(self):
-        container = Container()
-        
-        # Override only for this test
-        with container.override(PaymentGateway, DeclinedPaymentMock):
-            service = container.resolve(OrderService)
-            result = service.process_payment(100)
-            
-            assert result.status == "declined"
-```
-
-### Pytest Fixtures
-```python
 import pytest
 
-@pytest.fixture
-def di_container():
+# --- Your application code ---
+class Database:
+    def get_user(self, user_id: int) -> str:
+        # ... interacts with a real database
+        return "real_user"
+
+class UserService:
+    def __init__(self, db: Database):
+        self.db = db
+
+    def get_user_name(self, user_id: int) -> str:
+        return self.db.get_user(user_id)
+
+# --- Your test code ---
+
+def test_user_service_with_mock():
     container = Container()
-    container.register(AuthService)
-    yield container
-    container.cleanup()  # Call destroy hooks
+    container.register(UserService, scope=Scope.REQUEST)
 
-def test_auth_service(di_container):
-    service = di_container.resolve(AuthService)
-    assert service.login("admin") is True
+    # Create a mock for the Database
+    mock_db = Mock(spec=Database)
+    mock_db.get_user.return_value = "mock_user"
+
+    # Override the real Database provider with our mock
+    container.override_provider(Database, provider=lambda: mock_db)
+
+    with container.enter_scope(Scope.REQUEST):
+        service = container.resolve(UserService)
+        result = service.get_user_name(1)
+
+        assert result == "mock_user"
+        mock_db.get_user.assert_called_once_with(1)
 ```
 
-## 🚦 Integration Testing
+## 🧪 Using Pytest Fixtures
 
-### Testing with Real Container
+For more complex applications, you can use `pytest` fixtures to set up and tear down your container and dependencies for each test.
+
 ```python
-def test_full_workflow():
-    # Configure container as in production
-    container = configure_prod_container()
-    
-    # Replace just one external service
-    container.register(EmailService, MockEmailService)
-    
-    # Test complete flow
-    result = container.resolve(MainWorkflow).run()
-    assert result.success is True
+@pytest.fixture
+def test_container() -> Container:
+    container = Container()
+    # You can register common test dependencies here
+    return container
+
+def test_some_feature(test_container: Container):
+    # Override a specific dependency for this test
+    test_container.override_provider(EmailService, provider=lambda: MockEmailService())
+
+    with test_container.enter_scope(Scope.REQUEST):
+        service = test_container.resolve(MyFeatureService)
+        assert service.run() is True
 ```
 
-### Async Service Testing
+## 🚦 Testing Asynchronous Services
+
+Testing `async` components follows the same pattern, but uses `resolve_async` and `enter_scope_async`.
+
 ```python
 @pytest.mark.asyncio
-async def test_async_service():
+async def test_async_service_with_mock():
     container = Container()
-    container.register(AsyncDataLoader)
-    
-    loader = await container.resolve_async(AsyncDataLoader)
-    data = await loader.load()
-    assert len(data) > 0
+    container.register(AsyncService, scope=Scope.REQUEST)
+
+    mock_api = Mock()
+    mock_api.fetch.return_value = asyncio.Future()
+    mock_api.fetch.return_value.set_result("mock_data")
+
+    container.override_provider(ExternalAPI, provider=lambda: mock_api)
+
+    async with container.enter_scope_async(Scope.REQUEST):
+        service = await container.resolve_async(AsyncService)
+        result = await service.get_data()
+
+        assert result == "mock_data"
 ```
 
-## 🔄 Dependency Isolation
+## 🛡️ Testing for Errors
 
-### Resetting State Between Tests
-```python
-@pytest.fixture(autouse=True)
-def reset_container():
-    Container._global_instance = None  # Reset singleton container
-    yield
-```
+You can also test that your application correctly handles errors from the container, such as circular dependencies.
 
-### Testing Circular Dependencies
 ```python
-def test_circular_deps():
+def test_circular_dependency_detection():
     container = Container()
-    
+
     class ServiceA:
         def __init__(self, b: 'ServiceB'): ...
-    
+
     class ServiceB:
         def __init__(self, a: ServiceA): ...
-    
+
+    container.register(ServiceA)
+    container.register(ServiceB)
+
     with pytest.raises(CircularDependencyError):
         container.resolve(ServiceA)
 ```
-
-## 🛠️ Debugging Techniques
-
-### Resolution Tracing
-```python
-def test_debug_resolution():
-    container = Container()
-    container.trace_resolution = True  # Enable debug logs
-    
-    # Test will output resolution path:
-    # Resolving UserService → Database → Config
-    container.resolve(UserService)
-```
-
-### Dependency Graph Validation
-```python
-def test_dependency_graph():
-    container = configure_prod_container()
-    graph = container.get_dependency_graph()
-    
-    # Verify no unexpected dependencies
-    assert "ObsoleteService" not in graph
-    assert "Database" in graph["UserService"]
-```
-
-## 📊 Test Coverage Strategies
-
-### Key Areas to Test
-1. **Container Registration**
-   ```python
-   def test_registration():
-       container = Container()
-       container.register(Interface, Implementation)
-       assert container.is_registered(Interface) is True
-   ```
-
-2. **Lifecycle Hooks**
-   ```python
-   def test_init_hook():
-       mock = Mock()
-       container.register(Service, init_hook="setup")
-       container.resolve(Service)
-       mock.setup.assert_called_once()
-   ```
-
-3. **Edge Cases**
-   ```python
-   def test_unregistered_service():
-       container = Container()
-       with pytest.raises(DependencyResolutionError):
-           container.resolve(UnregisteredService)
-   ```
 
 [← Back to Documentation](README.md) | [Framework Integrations →](FRAMEWORKS.md)

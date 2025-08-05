@@ -1,153 +1,50 @@
-# AutoDI Performance Optimization Guide
+# AutoDI Performance
 
-## ⚡ Resolution Performance Metrics
+AutoDI is designed to be lightweight and efficient, but as with any dependency injection framework, there are performance considerations to keep in mind.
 
-### Benchmark Results (Python 3.10)
-```text
-| Operation               | Time (μs) | Memory (KB) |
-|-------------------------|----------|------------|
-| Simple Resolution       | 45.2     | 2.1        |
-| Deep Chain (5 levels)   | 128.7    | 6.8        |
-| Singleton Resolution    | 12.4     | 0.3        |
-| Async Resolution        | 89.5     | 3.2        |
-```
+## ⚡ Resolution Overhead
 
-## 🚀 Startup Optimization
+Dependency resolution is not free. Each time you resolve a dependency, the container performs a series of actions:
 
-### Eager Initialization
-```python
-@app.on_event("startup")
-async def warmup_container():
-    # Pre-resolve critical singletons
-    container.resolve(DatabaseConnection)
-    container.resolve(CacheService)
-```
+1.  **Lookup**: Finding the registered provider for the requested type.
+2.  **Scope Check**: Verifying if the dependency is already created in the current scope.
+3.  **Instantiation**: Calling the provider (factory) to create a new instance if one doesn't exist.
+4.  **Lifecycle Hooks**: Calling `init_hook` if one is defined.
 
-### Lazy Loading Pattern
-```python
-@inject(container, lazy=True)
-class HeavyService:
-    def __init__(self):
-        self._loaded = False
-    
-    def _load(self):
-        if not self._loaded:
-            # Expensive initialization
-            self._loaded = True
-
-    def operation(self):
-        self._load()
-        # ... normal operations
-```
+For most applications, this overhead is negligible. However, in performance-critical code paths, you should be mindful of how often you resolve new dependencies.
 
 ## 🧠 Memory Management
 
-### Singleton vs Transient
-```python
-# Memory-efficient singleton
-container.register(AnalyticsService, is_singleton=True)
+Understanding scopes is key to managing memory effectively.
 
-# Lightweight transient
-container.register(RequestValidator)
+-   **`Scope.APP` (Singleton)**: Use this for large, long-lived objects that are expensive to create. Since only one instance is ever created, it's memory-efficient. Be cautious about storing mutable state in singletons, as it will be shared across the entire application.
+
+-   **`Scope.REQUEST`**: This scope is designed for short-lived objects. The memory used by these dependencies is reclaimed when the scope is exited. This is ideal for web requests or other transactional tasks.
+
+## 🚀 Best Practices
+
+### 1. Avoid Resolving in Hot Loops
+
+Resolving dependencies inside a tight loop can add unnecessary overhead. If you need a dependency multiple times within the same block of code, resolve it once and reuse the instance.
+
+```python
+# Good: Resolve once outside the loop
+service = container.resolve(MyService)
+for item in items:
+    service.process(item)
+
+# Bad: Resolving repeatedly inside the loop
+for item in items:
+    service = container.resolve(MyService)
+    service.process(item)
 ```
 
-### Scoped Dependencies
-```python
-# Request-scoped (FastAPI)
-@app.middleware("http")
-async def di_scope(request: Request, call_next):
-    with container.scope("request"):
-        response = await call_next(request)
-        container.cleanup_scope("request")  # Release resources
-    return response
-```
+### 2. Use Scopes Correctly
 
-## 🔄 Caching Strategies
+Placing a dependency in the correct scope is the most important performance optimization you can make. Assigning a dependency to `Scope.APP` when it could be `Scope.REQUEST` might hold onto memory unnecessarily.
 
-### Resolution Cache
-```python
-# Enable resolution caching (reuses resolved graphs)
-container.enable_resolution_cache()
+### 3. Keep Providers Fast
 
-# Clear between test cases
-def teardown():
-    container.clear_resolution_cache()
-```
-
-### Type Hint Cache
-```python
-# Pre-cache complex types
-container.cache_type_hints(MyService)
-
-# Disable for memory-constrained environments
-container.disable_type_hint_caching()
-```
-
-## 🛠️ Production Configuration
-
-### Recommended Settings
-```python
-container.configure(
-    resolution_cache=True,  # ~15% faster resolution
-    type_hint_cache=True,  # ~30% faster first resolution
-    lazy_validation=False,  # Validate upfront
-    strict_mode=True       # Fail fast on config errors
-)
-```
-
-### Container Pooling
-```python
-from concurrent.futures import ThreadPoolExecutor
-
-def worker():
-    with container.clone() as thread_container:
-        # Thread-safe operations
-        service = thread_container.resolve(Service)
-        service.process()
-
-with ThreadPoolExecutor() as executor:
-    futures = [executor.submit(worker) for _ in range(10)]
-```
-
-## 📉 Performance Pitfalls
-
-### Anti-Patterns to Avoid
-```python
-# ❌ Dynamic registration in hot paths
-@app.get("/route")
-def bad_route():
-    container.register(NewType, lambda: ...)  # Expensive
-    return container.resolve(NewType)
-
-# ❌ Deep dependency chains
-class A:
-    def __init__(self, b: B, c: C, d: D, e: E): ...
-
-# ❌ Excessive init hooks
-@inject(container, init_hook="init1", secondary_hook="init2")
-class OverloadedService: ...
-```
-
-## 🔧 Profiling Techniques
-
-### Resolution Tracing
-```python
-# Generate flamegraph
-with container.profile() as profiler:
-    service = container.resolve(ComplexService)
-    
-profiler.export_flamegraph("resolution.svg")
-```
-
-### Memory Profiling
-```python
-from memory_profiler import profile
-
-@profile
-def test_memory_usage():
-    container = Container()
-    container.register(DataService)
-    return container.resolve(DataService)
-```
+Your provider functions (factories) should be fast and efficient. Avoid performing heavy I/O or blocking operations directly within a provider. If a dependency needs to perform a slow initialization, use the `init_hook` to do it asynchronously.
 
 [← Back to Documentation](README.md) | [Testing Guide →](TESTING.md)

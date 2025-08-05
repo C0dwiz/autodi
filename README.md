@@ -1,6 +1,6 @@
 # AutoDI: Elegant Dependency Injection for Python
 
-![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)
+![Python Version](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 [![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
@@ -8,13 +8,12 @@
 
 ## ✨ Features
 
-- **Zero Configuration** for basic usage
-- **Type Annotations Support** for intuitive dependency resolution
-- **Singleton & Transient Lifetimes** out of the box
-- **Lifecycle Hooks** for resource management
-- **Async Support** for modern Python apps
-- **Test-Friendly** with easy mock integration
-- **FastAPI/Aiogram** first-class support
+- **Type-Safe Resolution**: Leverages type hints, including `NewType`, for resolving dependencies.
+- **Flexible Scopes**: Manages dependency lifecycles with `APP` (singleton) and `REQUEST` scopes.
+- **Lifecycle Hooks**: Automates resource management with `init_hook` and `destroy_hook`.
+- **Full Async Support**: Seamlessly handles `async` providers and lifecycle hooks.
+- **Test-Friendly**: Provides `override_provider` for easy mocking and test isolation.
+- **Framework Integrations**: Offers helpers for frameworks like FastAPI.
 
 ## 📦 Installation
 
@@ -27,38 +26,49 @@ pip install git+https://github.com/C0dwiz/autodi
 ### Basic Usage
 
 ```python
-from autodi import Container
+from autodi import Container, Scope
 
-container = Container()
-
+# 1. Define your components
 class Database:
-    def connect(self):
-        return "Connected!"
+    def query(self, sql: str) -> str:
+        return f"Executing: {sql}"
 
 class UserService:
-    def __init__(self, db: Database):  # Auto-injected
+    def __init__(self, db: Database):
         self.db = db
 
-service = container.resolve(UserService)
-print(service.db.connect())  # "Connected!"
+# 2. Create and configure the container
+container = Container()
+container.register(Database, scope=Scope.APP) # Singleton
+container.register(UserService, scope=Scope.REQUEST) # Per-request
+
+# 3. Resolve dependencies
+with container.enter_scope(Scope.REQUEST):
+    service = container.resolve(UserService)
+    print(service.db.query("SELECT * FROM users"))
 ```
 
 ### FastAPI Integration
 
 ```python
-from fastapi import FastAPI
-from autodi import Container, inject
+from fastapi import FastAPI, Depends
+from autodi import Container, Scope
+from autodi.extensions.fastapi import setup_dependency_injection
 
 app = FastAPI()
 container = Container()
 
-@inject(container)
+# This middleware handles REQUEST scope creation and cleanup
+setup_dependency_injection(app, container)
+
 class AuthService:
-    def login(self, user: str):
+    def login(self, user: str) -> str:
         return f"Welcome {user}!"
 
+container.register(AuthService, scope=Scope.REQUEST)
+
 @app.get("/login/{user}")
-async def login(user: str, auth: AuthService):
+async def login(user: str, auth: AuthService = Depends(container.resolve_async)):
     return {"message": auth.login(user)}
 ```
 
@@ -66,36 +76,26 @@ async def login(user: str, auth: AuthService):
 
 ### Lifecycle Hooks
 
+Manage resources like database connections automatically.
+
 ```python
-class CacheService:
-    def __init__(self):
-        self._cache = {}
-    
-    def init_cache(self):  # Init hook
-        self._cache.update(preload_data())
-    
-    def cleanup(self):     # Destroy hook
-        self._cache.clear()
+class DatabaseConnection:
+    async def connect(self):
+        print("Connecting to DB...")
+
+    async def close(self):
+        print("Closing DB connection...")
 
 container.register(
-    CacheService,
-    init_hook="init_cache",
-    destroy_hook="cleanup",
-    is_singleton=True
+    DatabaseConnection,
+    scope=Scope.REQUEST,
+    init_hook="connect",
+    destroy_hook="close",
 )
-```
 
-### Async Dependencies
-
-```python
-class AsyncLoader:
-    async def load_data(self):
-        await asyncio.sleep(0.1)
-        return [1, 2, 3]
-
-async def main():
-    loader = await container.resolve_async(AsyncLoader)
-    data = await loader.load_data()
+# `connect` is called on resolve, `close` is called when the scope ends.
+async with container.enter_scope_async(Scope.REQUEST):
+    db = await container.resolve_async(DatabaseConnection)
 ```
 
 ## 📚 Documentation

@@ -3,131 +3,104 @@
 ## 🌟 Dependency Injection Basics
 
 ### What is DI?
-Dependency Injection (DI) is a design pattern where objects receive their dependencies from an external source rather than creating them directly.
+Dependency Injection (DI) is a design pattern where objects receive their dependencies from an external source (the "container") rather than creating them directly. This decouples your components, making them more modular, testable, and maintainable.
 
 ```python
 # Without DI
 class UserService:
     def __init__(self):
-        self.db = Database()  # Direct dependency
+        self.db = Database()  # Direct, tight coupling
 
 # With DI
 class UserService:
-    def __init__(self, db: Database):  # Injected dependency
+    def __init__(self, db: Database):  # Injected, loose coupling
         self.db = db
 ```
 
 ## 🔧 Container Fundamentals
 
-### Registration Types
-| Type          | Description                          | Example                      |
-|---------------|--------------------------------------|------------------------------|
-| Interface     | Abstract type to implementation      | `register(Database, PostgresDB)` |
-| Self-binding  | Class registers itself               | `register(UserService)`       |
-| Factory       | Function that creates dependencies   | `register(str, create_config)`|
+The `Container` is the central component of AutoDI. It is responsible for managing the registration and resolution of your dependencies.
 
-### Resolution Methods
+### Registration
+You register a dependency by telling the container how to create it and what its lifecycle should be.
+
 ```python
-# Explicit resolution
-service = container.resolve(UserService)
+# Register a class. The container will instantiate it.
+container.register(UserService, scope=Scope.REQUEST)
 
-# Implicit (via type hints)
-@inject(container)
-class Controller:
-    def __init__(self, service: UserService):  # Auto-resolved
-        self.service = service
+# Register a provider (factory function) for more complex creation.
+container.register(Database, provider=create_db_connection, scope=Scope.APP)
 ```
 
-## ⚡ Lifetime Management
+### Resolution
+You resolve a dependency by asking the container for an instance of a specific type.
 
-### Supported Lifetimes
-1. **Transient** - New instance each time (default)
-   ```python
-   container.register(Service)
-   ```
-
-2. **Singleton** - Single shared instance
-   ```python
-   container.register(Service, is_singleton=True)
-   ```
-
-3. **Scoped** (Request-based) - Per-request instance
-   ```python
-   container.register(Service, scope="request")
-   ```
-
-## 🧩 Component Lifecycle
-
-### Hooks System
 ```python
-class ResourceService:
-    def initialize(self):  # Init hook
-        self.setup()
-    
-    def cleanup(self):     # Destroy hook
-        self.release()
+# Explicitly resolve an instance
+service = container.resolve(UserService)
+
+# The container automatically resolves dependencies for other dependencies.
+# When resolving UserService, the container sees it needs a Database and resolves it first.
+```
+
+## ⚡ Scope Management
+
+A dependency's "scope" defines its lifecycle: how long an instance should live.
+
+1.  **`Scope.APP`** (Singleton)
+    - A single instance is created and shared for the entire lifecycle of the container.
+    - Use for objects that are expensive to create and stateless, like database connection pools or configuration objects.
+    ```python
+    container.register(Config, scope=Scope.APP)
+    ```
+
+2.  **`Scope.REQUEST`** (Scoped)
+    - A new instance is created for each scope block (e.g., a web request or a worker task) and destroyed when the scope exits.
+    - This is the default for unregistered dependencies.
+    - Use for objects that hold request-specific state, like database sessions or user-specific services.
+    ```python
+    with container.enter_scope(Scope.REQUEST):
+        service = container.resolve(RequestScopedService)
+    # `service` is now destroyed
+    ```
+
+## 🧩 Component Lifecycle Hooks
+
+AutoDI can manage resources that need explicit setup and teardown, like network connections or file handles.
+
+-   `init_hook`: The name of a method to be called *after* the instance is created.
+-   `destroy_hook`: The name of a method to be called when the instance's scope is destroyed.
+
+```python
+class MessageQueue:
+    def connect(self): ...
+    def close(self): ...
 
 container.register(
-    ResourceService,
-    init_hook="initialize",
-    destroy_hook="cleanup"
+    MessageQueue,
+    scope=Scope.APP,
+    init_hook="connect",
+    destroy_hook="close"
 )
+
+# When the app shuts down...
+container.cleanup() # This will call the `close` method.
 ```
 
 ## 🔄 Dependency Graphs
 
-### Complex Resolution
-AutoDI automatically resolves dependency chains:
-```
-Controller → UserService → Database → Config
-```
+AutoDI automatically resolves entire dependency chains. If `ControllerA` depends on `ServiceB`, and `ServiceB` depends on `DatabaseC`, the container handles the instantiation of all three in the correct order.
 
 ### Circular Dependencies
-```python
-class ServiceA:
-    def __init__(self, b: 'ServiceB'): ...
-
-class ServiceB:
-    def __init__(self, a: ServiceA): ...
-
-# Raises CircularDependencyError
-container.resolve(ServiceA)
-```
+AutoDI will detect circular dependencies (e.g., A depends on B, and B depends on A) and raise a `CircularDependencyError` to prevent infinite recursion.
 
 ## 🛡️ Error Handling
 
-### Common Exceptions
-| Exception                     | Trigger Condition               |
-|-------------------------------|---------------------------------|
-| `DependencyResolutionError`   | Can't resolve dependency        |
-| `CircularDependencyError`     | Circular reference detected     |
-| `AsyncDependencyError`        | Async resolution failed         |
-
-## 🧪 Testing Support
-
-### Mocking Example
-```python
-class MockDatabase(Database):
-    def query(self):
-        return "mock_data"
-
-def test_service():
-    with container.override(Database, MockDatabase):
-        service = container.resolve(UserService)
-        assert service.get() == "mock_data"
-```
-
-## 📈 Best Practices
-
-### Do's and Don'ts
-✅ **Do**:
-- Use constructor injection
-- Leverage type hints
-- Register interfaces not implementations
-
-❌ **Don't**:
-- Use service locator pattern
-- Manually resolve deep in call stack
-- Mix DI with direct instantiation
+| Exception                 | When It's Raised                               |
+| ------------------------- | ---------------------------------------------- |
+| `DependencyResolutionError` | A dependency is requested but not registered.  |
+| `CircularDependencyError` | A circular reference is detected.              |
+| `ScopeError`              | A scope mismatch occurs (e.g., nested scopes). |
+| `ProviderError`           | A provider function fails during execution.    |
 
 [← Back to Documentation](README.md)

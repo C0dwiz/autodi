@@ -1,185 +1,92 @@
 # AutoDI Framework Integrations
 
+AutoDI is designed to integrate smoothly with popular Python web frameworks. Here are some recommended patterns.
+
 ## 🚀 FastAPI Integration
 
-### Basic Setup
+FastAPI's dependency injection system works seamlessly with AutoDI.
+
+### Recommended Setup
+
+This pattern uses a middleware to manage the `REQUEST` scope and a simple helper to inject dependencies.
+
 ```python
+# main.py
 from fastapi import FastAPI, Depends
-from autodi import Container
+from autodi import Container, Scope
+from autodi.extensions.fastapi import setup_dependency_injection
 
 app = FastAPI()
 container = Container()
 
-class AuthService:
-    def login(self, username: str):
-        return f"Welcome {username}!"
+# This middleware automatically creates and cleans up the REQUEST scope.
+setup_dependency_injection(app, container)
 
-# Option 1: Direct resolution
-@app.get("/login")
-async def login(username: str):
-    service = container.resolve(AuthService)
-    return service.login(username)
+# --- Define and register your dependencies ---
 
-# Option 2: Using Depends
-@app.get("/login-depends")
-async def login_depends(
-    username: str,
-    service: AuthService = Depends(container.resolve(AuthService))
-):
-    return service.login(username)
+class MyService:
+    def do_work(self) -> str:
+        return "Work done!"
+
+container.register(MyService, scope=Scope.REQUEST)
+
+# --- Inject into your endpoints ---
+
+@app.get("/")
+async def read_root(service: MyService = Depends(container.resolve_async)):
+    return {"message": service.do_work()}
 ```
 
-### Advanced Pattern (Recommended)
+### Lifecycle Management with FastAPI
+
+Use lifecycle hooks for resources that need to be managed per-request.
+
 ```python
-from autodi import inject
+class DatabaseConnection:
+    async def connect(self): ...
+    async def close(self): ...
 
-@inject(container)
-class PaymentService:
-    def charge(self, amount: float):
-        return f"Charged ${amount:.2f}"
+container.register(
+    DatabaseConnection,
+    scope=Scope.REQUEST,
+    init_hook="connect",
+    destroy_hook="close",
+)
 
-@app.post("/payments")
-async def create_payment(
-    amount: float,
-    service: PaymentService  # Auto-injected
-):
-    return {"result": service.charge(amount)}
+# The `setup_dependency_injection` middleware ensures that `connect` is called
+# at the beginning of a request and `close` is called at the end.
 ```
 
 ## 🤖 Aiogram (Telegram Bot) Integration
 
-### Handler Injection
+Use a custom middleware to manage scopes for each incoming message or event.
+
+### Recommended Setup
+
 ```python
-from aiogram import Dispatcher, types
-from autodi import inject
+from aiogram import Bot, Dispatcher, types
+from aiogram.dispatcher.middlewares.base import BaseMiddleware
+from autodi import Container, Scope
 
-dp = Dispatcher(bot)
+class DiMiddleware(BaseMiddleware):
+    def __init__(self, container: Container):
+        self.container = container
 
-@inject(container)
-class MessageHandler:
-    def __init__(self, analytics: AnalyticsService):
-        self.analytics = analytics
-    
-    async def handle_message(self, message: types.Message):
-        await self.analytics.track(message)
-        return "Processed!"
+    async def __call__(self, handler, event, data):
+        async with self.container.enter_scope_async(Scope.REQUEST):
+            data["container"] = self.container
+            return await handler(event, data)
 
-@dp.message_handler()
-async def on_message(
-    message: types.Message,
-    handler: MessageHandler  # Auto-injected
-):
-    await handler.handle_message(message)
+# --- In your main setup ---
+dp = Dispatcher()
+dp.update.outer_middleware.register(DiMiddleware(container))
+
+# --- In your handlers ---
+
+@dp.message_handler(commands=['start'])
+async def start_handler(message: types.Message, container: Container):
+    service = await container.resolve_async(MyService)
+    await message.answer(service.get_reply())
 ```
-
-### Factory Pattern
-```python
-class NotificationService:
-    async def send(self, user_id: int, text: str):
-        ...
-
-def create_service() -> NotificationService:
-    return NotificationService()
-
-container.register(NotificationService, create_service)
-
-@dp.message_handler(commands=['notify'])
-async def notify_user(
-    message: types.Message,
-    service: NotificationService = Depends(container.resolve(NotificationService))
-):
-    await service.send(message.from_user.id, "Hello!")
-```
-
-## 🌐 Django Integration
-
-### services.py
-```python
-from autodi import container
-
-class EmailService:
-    def send(self, to: str, body: str):
-        ...
-
-container.register(EmailService)
-```
-
-### views.py
-```python
-from django.http import JsonResponse
-from .services import container
-
-def send_email_view(request):
-    service = container.resolve(EmailService)
-    service.send("user@example.com", "Hello Django!")
-    return JsonResponse({"status": "sent"})
-```
-
-### Custom Middleware
-```python
-class DIContainerMiddleware:
-    def __init__(self, get_response):
-        self.get_response = get_response
-    
-    def __call__(self, request):
-        request.container = container  # Attach to request
-        return self.get_response(request)
-```
-
-## 🔥 Flask Integration
-
-### Application Factory
-```python
-from flask import Flask
-from autodi import Container
-
-def create_app():
-    app = Flask(__name__)
-    di = Container()
-    
-    @app.route("/")
-    def index():
-        service = di.resolve(SomeService)
-        return service.process()
-    
-    return app
-```
-
-### Blueprint Example
-```python
-@inject(container)
-class ReportService:
-    def generate(self):
-        return "Report data"
-
-bp = Blueprint('reports', __name__)
-
-@bp.route("/report")
-def get_report(service: ReportService):  # Injected
-    return service.generate()
-```
-
-## ⚡ Performance Tips
-
-### Framework-Specific Optimizations
-1. **FastAPI**: Pre-resolve dependencies in startup events
-   ```python
-   @app.on_event("startup")
-   async def setup_di():
-       container.resolve(SingletonService)  # Warm-up
-   ```
-
-2. **Aiogram**: Use middleware for request-scoped dependencies
-   ```python
-   class DIMiddleware(BaseMiddleware):
-       async def __call__(self, handler, event, data):
-           data['di_container'] = container
-           return await handler(event, data)
-   ```
-
-3. **Django/Flask**: Cache container in app config
-   ```python
-   app.extensions['di'] = container
-   ```
 
 [← Back to Documentation](README.md) | [Core Concepts →](CORE_CONCEPTS.md)
